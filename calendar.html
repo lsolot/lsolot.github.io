@@ -572,9 +572,10 @@ async function confirmDelete(eventId) {
   hidePageAlert();
   try {
     await withFreshToken(() =>
-      gapi.client.calendar.events.delete({ calendarId: 'primary', eventId })
+      gapi.client.calendar.events.delete({ calendarId: 'primary', eventId, sendUpdates: 'none' })
     );
   } catch (e) {
+    console.error('Delete failed – full error:', e?.result ?? e);
     showPageAlert('Delete failed: ' + apiMsg(e));
     return;
   }
