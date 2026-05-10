@@ -146,6 +146,20 @@ textarea.fc { resize: vertical; }
 .client-id-row input { flex: 1; }
 
 code { background: #f0f0f0; padding: 1px 5px; border-radius: 4px; font-size: 0.9em; }
+
+.reminder-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.reminder-row select { flex: 1; }
+.reminder-row .reminder-remove {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  font-size: 0.82em;
+}
 </style>
 
 <div id="calendar-app">
@@ -236,6 +250,12 @@ code { background: #f0f0f0; padding: 1px 5px; border-radius: 4px; font-size: 0.9
       <textarea id="ev-desc" class="fc" rows="3" placeholder="Add a description"></textarea>
     </div>
 
+    <div class="fg">
+      <label>Reminders</label>
+      <div id="reminders-list"></div>
+      <button type="button" class="btn btn-outline btn-sm" onclick="addReminder()">+ Add reminder</button>
+    </div>
+
     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:6px">
       <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" id="save-btn" onclick="saveEvent()">Save</button>
@@ -246,6 +266,19 @@ code { background: #f0f0f0; padding: 1px 5px; border-radius: 4px; font-size: 0.9
 <script>
 const SCOPES = 'https://www.googleapis.com/auth/calendar';
 const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest';
+
+const REMINDER_PRESETS = [
+  { label: 'At time of event', minutes: 0 },
+  { label: '5 minutes before', minutes: 5 },
+  { label: '10 minutes before', minutes: 10 },
+  { label: '15 minutes before', minutes: 15 },
+  { label: '30 minutes before', minutes: 30 },
+  { label: '1 hour before', minutes: 60 },
+  { label: '2 hours before', minutes: 120 },
+  { label: '1 day before', minutes: 1440 },
+  { label: '2 days before', minutes: 2880 },
+  { label: '1 week before', minutes: 10080 },
+];
 
 let tokenClient, gapiInited = false, gisInited = false;
 let editingEventId = null, editingEventOriginal = null;
@@ -365,6 +398,16 @@ async function loadEvents() {
   }
 }
 
+function fmtReminderLabel(r) {
+  const m = r.minutes;
+  const method = r.method === 'email' ? 'Email' : 'Popup';
+  if (m === 0) return `${method} at event time`;
+  if (m < 60) return `${method} ${m} min before`;
+  if (m < 1440) return `${method} ${m / 60} hr before`;
+  if (m < 10080) { const d = m / 1440; return `${method} ${d} day${d > 1 ? 's' : ''} before`; }
+  return `${method} ${m / 10080} week before`;
+}
+
 function renderEvents(events) {
   const list = document.getElementById('events-list');
   eventsMap = {};
@@ -380,6 +423,12 @@ function renderEvents(events) {
       : fmtDateTime(ev.start.dateTime) + ' – ' + fmtTime(ev.end.dateTime);
     const loc = ev.location ? `<div class="event-meta">&#128205; ${esc(ev.location)}</div>` : '';
     const desc = ev.description ? `<div class="event-description">${esc(ev.description)}</div>` : '';
+
+    const overrides = ev.reminders && !ev.reminders.useDefault && ev.reminders.overrides;
+    const reminderStr = overrides && overrides.length
+      ? `<div class="event-meta">&#128276; ${overrides.map(r => esc(fmtReminderLabel(r))).join(' &middot; ')}</div>`
+      : '';
+
     const safeId = esc(ev.id);
     const readOnly = ev.eventType === 'birthday' || ev.eventType === 'fromGmail';
     const actions = readOnly
@@ -390,10 +439,50 @@ function renderEvents(events) {
       <div class="event-card">
         <div class="event-title">${esc(ev.summary || '(No title)')}</div>
         <div class="event-meta">&#128336; ${timeStr}</div>
-        ${loc}${desc}
+        ${loc}${reminderStr}${desc}
         <div class="event-actions">${actions}</div>
       </div>`;
   }).join('');
+}
+
+// ── Reminders UI ───────────────────────────────────────────────────────────
+
+function reminderPresetOptions(selectedMinutes) {
+  return REMINDER_PRESETS.map(p =>
+    `<option value="${p.minutes}"${p.minutes === selectedMinutes ? ' selected' : ''}>${esc(p.label)}</option>`
+  ).join('');
+}
+
+function addReminder(method = 'popup', minutes = 30) {
+  const row = document.createElement('div');
+  row.className = 'reminder-row';
+  row.innerHTML = `
+    <select class="fc reminder-method">
+      <option value="popup"${method === 'popup' ? ' selected' : ''}>Popup</option>
+      <option value="email"${method === 'email' ? ' selected' : ''}>Email</option>
+    </select>
+    <select class="fc reminder-time">${reminderPresetOptions(minutes)}</select>
+    <button type="button" class="btn btn-outline btn-sm reminder-remove" onclick="this.closest('.reminder-row').remove()">&#10005;</button>`;
+  document.getElementById('reminders-list').appendChild(row);
+}
+
+function clearReminders() {
+  document.getElementById('reminders-list').innerHTML = '';
+}
+
+function getReminders() {
+  const rows = document.querySelectorAll('#reminders-list .reminder-row');
+  return Array.from(rows).map(row => ({
+    method: row.querySelector('.reminder-method').value,
+    minutes: parseInt(row.querySelector('.reminder-time').value, 10),
+  }));
+}
+
+function setReminders(overrides) {
+  clearReminders();
+  if (overrides && overrides.length) {
+    overrides.forEach(r => addReminder(r.method, r.minutes));
+  }
 }
 
 // ── Modal: create ──────────────────────────────────────────────────────────
@@ -407,6 +496,8 @@ function openCreateModal() {
   document.getElementById('ev-desc').value = '';
   document.getElementById('ev-allday').checked = false;
   hideModalAlert();
+  clearReminders();
+  addReminder('popup', 30);
 
   const now = new Date();
   const later = new Date(now.getTime() + 3600000);
@@ -436,6 +527,9 @@ async function openEditModal(eventId) {
     document.getElementById('ev-desc').value = ev.description || '';
     document.getElementById('ev-allday').checked = allDay;
     hideModalAlert();
+
+    const overrides = ev.reminders && !ev.reminders.useDefault ? ev.reminders.overrides : null;
+    setReminders(overrides);
 
     if (allDay) {
       document.getElementById('ev-start').type = 'date';
@@ -498,6 +592,11 @@ async function saveEvent() {
   if (!startVal) { showModalAlert('Start is required.'); return; }
   if (!endVal)   { showModalAlert('End is required.'); return; }
 
+  const reminderOverrides = getReminders();
+  const reminders = reminderOverrides.length
+    ? { useDefault: false, overrides: reminderOverrides }
+    : { useDefault: true };
+
   let resource;
   if (allDay) {
     const endExcl = new Date(endVal + 'T00:00:00');
@@ -508,6 +607,7 @@ async function saveEvent() {
       end: { date: endExcl.toISOString().split('T')[0] },
       location: location || null,
       description: desc || null,
+      reminders,
     };
   } else {
     if (new Date(endVal) <= new Date(startVal)) {
@@ -519,6 +619,7 @@ async function saveEvent() {
       end: { dateTime: new Date(endVal).toISOString() },
       location: location || null,
       description: desc || null,
+      reminders,
     };
   }
 
