@@ -524,11 +524,15 @@ async function saveEvent() {
     if (editingEventId) {
       // Merge with original so attendees/recurrence/reminders are preserved
       const merged = Object.assign({}, editingEventOriginal, resource);
-      await gapi.client.calendar.events.update({
-        calendarId: 'primary', eventId: editingEventId, resource: merged,
-      });
+      await withFreshToken(() =>
+        gapi.client.calendar.events.update({
+          calendarId: 'primary', eventId: editingEventId, resource: merged,
+        })
+      );
     } else {
-      await gapi.client.calendar.events.insert({ calendarId: 'primary', resource });
+      await withFreshToken(() =>
+        gapi.client.calendar.events.insert({ calendarId: 'primary', resource })
+      );
     }
     closeModal();
     await loadEvents();
@@ -539,6 +543,27 @@ async function saveEvent() {
   }
 }
 
+// ── Token refresh helper ───────────────────────────────────────────────────
+
+async function withFreshToken(fn) {
+  try {
+    return await fn();
+  } catch (e) {
+    const code = e?.result?.error?.code || e?.status;
+    if (code === 401 && tokenClient) {
+      await new Promise((resolve, reject) => {
+        tokenClient.callback = (resp) => {
+          if (resp.error) { reject(new Error('Re-auth failed: ' + resp.error)); return; }
+          resolve();
+        };
+        tokenClient.requestAccessToken({ prompt: '' });
+      });
+      return await fn();
+    }
+    throw e;
+  }
+}
+
 // ── Delete ─────────────────────────────────────────────────────────────────
 
 async function confirmDelete(eventId) {
@@ -546,11 +571,14 @@ async function confirmDelete(eventId) {
   if (!confirm(`Delete "${title}"?\nThis cannot be undone.`)) return;
   hidePageAlert();
   try {
-    await gapi.client.calendar.events.delete({ calendarId: 'primary', eventId });
-    await loadEvents();
+    await withFreshToken(() =>
+      gapi.client.calendar.events.delete({ calendarId: 'primary', eventId })
+    );
   } catch (e) {
     showPageAlert('Delete failed: ' + apiMsg(e));
+    return;
   }
+  await loadEvents();
 }
 
 // ── Utilities ──────────────────────────────────────────────────────────────
@@ -567,7 +595,9 @@ function showModalAlert(msg) {
 function hideModalAlert() { document.getElementById('modal-alert').style.display = 'none'; }
 
 function apiMsg(e) {
-  return e?.result?.error?.message || e?.message || 'Unknown error';
+  const code = e?.result?.error?.code || e?.status || '';
+  const msg = e?.result?.error?.message || e?.message || 'Unknown error';
+  return code ? `${msg} (HTTP ${code})` : msg;
 }
 
 function esc(s) {
