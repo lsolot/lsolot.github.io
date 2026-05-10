@@ -380,15 +380,17 @@ function renderEvents(events) {
     const loc = ev.location ? `<div class="event-meta">📍 ${esc(ev.location)}</div>` : '';
     const desc = ev.description ? `<div class="event-description">${esc(ev.description)}</div>` : '';
     const safeId = esc(ev.id);
+    const readOnly = ev.eventType === 'birthday' || ev.eventType === 'fromGmail';
+    const actions = readOnly
+      ? `<span style="font-size:0.82em;color:#6c757d;font-style:italic">Read-only (${ev.eventType})</span>`
+      : `<button class="btn btn-outline btn-sm" onclick="openEditModal('${safeId}')">Edit</button>
+           <button class="btn btn-danger btn-sm" onclick="confirmDelete('${safeId}')">Delete</button>`;
     return `
       <div class="event-card">
         <div class="event-title">${esc(ev.summary || '(No title)')}</div>
         <div class="event-meta">🕐 ${timeStr}</div>
         ${loc}${desc}
-        <div class="event-actions">
-          <button class="btn btn-outline btn-sm" onclick="openEditModal('${safeId}')">Edit</button>
-          <button class="btn btn-danger btn-sm" onclick="confirmDelete('${safeId}')">Delete</button>
-        </div>
+        <div class="event-actions">${actions}</div>
       </div>`;
   }).join('');
 }
