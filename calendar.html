@@ -179,7 +179,7 @@ code { background: #f0f0f0; padding: 1px 5px; border-radius: 4px; font-size: 0.9
       <div style="display:flex;gap:8px;align-items:center">
         <button id="signin-btn" class="btn btn-primary" onclick="handleSignIn()" style="display:none">Sign in with Google</button>
         <button id="signout-btn" class="btn btn-outline" onclick="handleSignOut()" style="display:none">Sign out</button>
-        <button class="btn btn-outline btn-sm" onclick="resetClientId()" title="Reconfigure">⚙ Setup</button>
+        <button class="btn btn-outline btn-sm" onclick="resetClientId()" title="Reconfigure">&#9881; Setup</button>
       </div>
     </div>
   </div>
@@ -192,7 +192,7 @@ code { background: #f0f0f0; padding: 1px 5px; border-radius: 4px; font-size: 0.9
       <h3 style="margin:0">Upcoming Events</h3>
       <button class="btn btn-primary" onclick="openCreateModal()">+ New Event</button>
     </div>
-    <div id="loading" class="loading">Loading events…</div>
+    <div id="loading" class="loading">Loading events&hellip;</div>
     <div id="events-list"></div>
   </div>
 
@@ -377,13 +377,13 @@ function renderEvents(events) {
     const timeStr = allDay
       ? fmtDate(ev.start.date)
       : fmtDateTime(ev.start.dateTime) + ' – ' + fmtTime(ev.end.dateTime);
-    const loc = ev.location ? `<div class="event-meta">📍 ${esc(ev.location)}</div>` : '';
+    const loc = ev.location ? `<div class="event-meta">&#128205; ${esc(ev.location)}</div>` : '';
     const desc = ev.description ? `<div class="event-description">${esc(ev.description)}</div>` : '';
     const safeId = esc(ev.id);
     return `
       <div class="event-card">
         <div class="event-title">${esc(ev.summary || '(No title)')}</div>
-        <div class="event-meta">🕐 ${timeStr}</div>
+        <div class="event-meta">&#128336; ${timeStr}</div>
         ${loc}${desc}
         <div class="event-actions">
           <button class="btn btn-outline btn-sm" onclick="openEditModal('${safeId}')">Edit</button>
@@ -438,7 +438,7 @@ async function openEditModal(eventId) {
       document.getElementById('ev-start').type = 'date';
       document.getElementById('ev-end').type = 'date';
       document.getElementById('ev-start').value = ev.start.date;
-      // Google's end date is exclusive — show inclusive date to the user
+      // Google's end date is exclusive -- show inclusive date to the user
       const endD = new Date(ev.end.date + 'T00:00:00');
       endD.setDate(endD.getDate() - 1);
       document.getElementById('ev-end').value = endD.toISOString().split('T')[0];
@@ -572,9 +572,10 @@ async function confirmDelete(eventId) {
   hidePageAlert();
   try {
     await withFreshToken(() =>
-      gapi.client.calendar.events.delete({ calendarId: 'primary', eventId })
+      gapi.client.calendar.events.delete({ calendarId: 'primary', eventId, sendUpdates: 'none' })
     );
   } catch (e) {
+    console.error('Delete failed -- full error:', e?.result ?? e);
     showPageAlert('Delete failed: ' + apiMsg(e));
     return;
   }
