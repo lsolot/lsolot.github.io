@@ -57,6 +57,7 @@ permalink: /calendar/
   display: flex;
   gap: 8px;
   margin-top: 12px;
+  align-items: center;
 }
 
 .modal-overlay {
@@ -149,16 +150,16 @@ code { background: #f0f0f0; padding: 1px 5px; border-radius: 4px; font-size: 0.9
 
 <div id="calendar-app">
 
-  <!-- ── Setup card (shown when no Client ID is saved) ── -->
+  <!-- Setup card (shown when no Client ID is saved) -->
   <div id="setup-section" style="display:none">
     <div class="setup-card">
       <h3>Setup: Google Calendar API</h3>
       <p>This page uses the Google Calendar API with your own OAuth credentials so it works on a static GitHub Pages site. One-time setup:</p>
       <ol>
         <li>Open the <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a> and create a project.</li>
-        <li><strong>APIs &amp; Services → Library</strong> → search <em>Google Calendar API</em> → Enable.</li>
-        <li><strong>APIs &amp; Services → OAuth consent screen</strong> → External → fill in app name &amp; your email → add your Google account as a <em>Test user</em>.</li>
-        <li><strong>Credentials → Create Credentials → OAuth client ID</strong> → choose <strong>Web application</strong>.</li>
+        <li><strong>APIs &amp; Services &rarr; Library</strong> &rarr; search <em>Google Calendar API</em> &rarr; Enable.</li>
+        <li><strong>APIs &amp; Services &rarr; OAuth consent screen</strong> &rarr; External &rarr; fill in app name &amp; your email &rarr; add your Google account as a <em>Test user</em>.</li>
+        <li><strong>Credentials &rarr; Create Credentials &rarr; OAuth client ID</strong> &rarr; choose <strong>Web application</strong>.</li>
         <li>Under <em>Authorized JavaScript origins</em> add: <code>https://YOUR_USERNAME.github.io</code> and (for local dev) <code>http://localhost:4000</code>.</li>
         <li>Copy the <strong>Client ID</strong> (ends with <code>.apps.googleusercontent.com</code>) and paste below.</li>
       </ol>
@@ -172,7 +173,7 @@ code { background: #f0f0f0; padding: 1px 5px; border-radius: 4px; font-size: 0.9
     </div>
   </div>
 
-  <!-- ── Auth bar (shown once Client ID is saved) ── -->
+  <!-- Auth bar (shown once Client ID is saved) -->
   <div id="auth-section" style="display:none">
     <div class="auth-bar">
       <strong>Google Calendar</strong>
@@ -186,7 +187,7 @@ code { background: #f0f0f0; padding: 1px 5px; border-radius: 4px; font-size: 0.9
 
   <div id="page-alert" class="alert alert-danger"></div>
 
-  <!-- ── Calendar section (shown after sign-in) ── -->
+  <!-- Calendar section (shown after sign-in) -->
   <div id="calendar-section" style="display:none">
     <div class="events-header">
       <h3 style="margin:0">Upcoming Events</h3>
@@ -198,7 +199,7 @@ code { background: #f0f0f0; padding: 1px 5px; border-radius: 4px; font-size: 0.9
 
 </div>
 
-<!-- ── Event modal ── -->
+<!-- Event modal -->
 <div id="event-modal" class="modal-overlay">
   <div class="modal-box">
     <h4 id="modal-title">New Event</h4>
@@ -380,15 +381,17 @@ function renderEvents(events) {
     const loc = ev.location ? `<div class="event-meta">&#128205; ${esc(ev.location)}</div>` : '';
     const desc = ev.description ? `<div class="event-description">${esc(ev.description)}</div>` : '';
     const safeId = esc(ev.id);
+    const readOnly = ev.eventType === 'birthday' || ev.eventType === 'fromGmail';
+    const actions = readOnly
+      ? `<span style="font-size:0.82em;color:#6c757d;font-style:italic">Read-only (${ev.eventType})</span>`
+      : `<button class="btn btn-outline btn-sm" onclick="openEditModal('${safeId}')">Edit</button>
+         <button class="btn btn-danger btn-sm" onclick="confirmDelete('${safeId}')">Delete</button>`;
     return `
       <div class="event-card">
         <div class="event-title">${esc(ev.summary || '(No title)')}</div>
         <div class="event-meta">&#128336; ${timeStr}</div>
         ${loc}${desc}
-        <div class="event-actions">
-          <button class="btn btn-outline btn-sm" onclick="openEditModal('${safeId}')">Edit</button>
-          <button class="btn btn-danger btn-sm" onclick="confirmDelete('${safeId}')">Delete</button>
-        </div>
+        <div class="event-actions">${actions}</div>
       </div>`;
   }).join('');
 }
@@ -575,7 +578,6 @@ async function confirmDelete(eventId) {
       gapi.client.calendar.events.delete({ calendarId: 'primary', eventId, sendUpdates: 'none' })
     );
   } catch (e) {
-    console.error('Delete failed -- full error:', e?.result ?? e);
     showPageAlert('Delete failed: ' + apiMsg(e));
     return;
   }
