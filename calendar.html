@@ -248,6 +248,7 @@ const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/calendar/v3/
 
 let tokenClient, gapiInited = false, gisInited = false;
 let editingEventId = null, editingEventOriginal = null;
+let eventsMap = {};
 
 // ── Client ID storage ──────────────────────────────────────────────────────
 
@@ -365,25 +366,28 @@ async function loadEvents() {
 
 function renderEvents(events) {
   const list = document.getElementById('events-list');
+  eventsMap = {};
   if (!events.length) {
     list.innerHTML = '<div class="empty-state"><strong>No upcoming events</strong><p>Click <em>+ New Event</em> to create one.</p></div>';
     return;
   }
   list.innerHTML = events.map(ev => {
+    eventsMap[ev.id] = ev;
     const allDay = !ev.start.dateTime;
     const timeStr = allDay
       ? fmtDate(ev.start.date)
       : fmtDateTime(ev.start.dateTime) + ' – ' + fmtTime(ev.end.dateTime);
     const loc = ev.location ? `<div class="event-meta">📍 ${esc(ev.location)}</div>` : '';
     const desc = ev.description ? `<div class="event-description">${esc(ev.description)}</div>` : '';
+    const safeId = esc(ev.id);
     return `
       <div class="event-card">
         <div class="event-title">${esc(ev.summary || '(No title)')}</div>
         <div class="event-meta">🕐 ${timeStr}</div>
         ${loc}${desc}
         <div class="event-actions">
-          <button class="btn btn-outline btn-sm" onclick='openEditModal(${JSON.stringify(ev.id)})'>Edit</button>
-          <button class="btn btn-danger btn-sm" onclick='confirmDelete(${JSON.stringify(ev.id)}, ${JSON.stringify(ev.summary || "(No title)")})'>Delete</button>
+          <button class="btn btn-outline btn-sm" onclick="openEditModal('${safeId}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="confirmDelete('${safeId}')">Delete</button>
         </div>
       </div>`;
   }).join('');
@@ -537,7 +541,8 @@ async function saveEvent() {
 
 // ── Delete ─────────────────────────────────────────────────────────────────
 
-async function confirmDelete(eventId, title) {
+async function confirmDelete(eventId) {
+  const title = (eventsMap[eventId] && eventsMap[eventId].summary) || '(No title)';
   if (!confirm(`Delete "${title}"?\nThis cannot be undone.`)) return;
   hidePageAlert();
   try {
